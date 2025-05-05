@@ -4,6 +4,9 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import AuthWrapper from "@/providers/auth-provider";
 import { ClientWrapper } from "./_components/client-wrapper";
+import { Headers } from "./_components/headers";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "./_components/app-side-bar";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -27,9 +30,16 @@ export default function RootLayout({
         className={`${poppins.variable} font-poppins antialiased`}>
         <AuthWrapper >
           <ClientWrapper>
+            <SidebarProvider>
             <ThemeProvider attribute="class" defaultTheme="light" >
+              <AppSidebar />
+              <div className="flex flex-col w-full ">
+                 <Headers />
               {children}
+              </div>
+             
             </ThemeProvider>
+            </SidebarProvider>
           </ClientWrapper>
         </AuthWrapper>
       </body>

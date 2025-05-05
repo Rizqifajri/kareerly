@@ -50,9 +50,15 @@ export const useAuth = () => {
     }
   }
 
+  const logOut = () => {
+    client.authStore.clear();
+    window.location.href = "/auth/login";
+  }
+
   return {
     login,
     signUp,
+    logOut,
     isLoading,
     error
   }
