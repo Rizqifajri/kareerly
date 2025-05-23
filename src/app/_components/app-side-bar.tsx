@@ -29,8 +29,8 @@ const data = {
   ],
   navMain: [
     { icon: <House />, title: 'Home', path: '/home' },
-    { icon: <SparklesIcon />, title: 'Ask AI', path: '' },
-    { icon: <Upload />, title: 'Upload CV', path: '' }
+    { icon: <SparklesIcon />, title: 'Ask AI', path: '/ask-ai' },
+    { icon: <Upload />, title: 'Upload CV', path: '/resume' }
     // { title: 'Trash', path: 'trash' }
   ]
 };
@@ -49,7 +49,7 @@ export async function AppSidebar({
           {/* We create a collapsible SidebarGroup for each parent. */}
           <div className="flex flex-col gap-3">
             {data.navMain.map(item => (
-              <Link key={item.title} href={`/dashboard/${item.path}`}>
+              <Link key={item.title} href={`${item.path}`}>
                 <Button
                   title={item.title}
                   className="cursor-pointer mx-auto w-[250px] bg-transparent shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
