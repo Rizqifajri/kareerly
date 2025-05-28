@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 import { useAuth } from "../(public)/auth/_hooks/use-auth"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export const Headers = () => {
   const { user } = useUser()
@@ -55,11 +56,14 @@ export const Headers = () => {
                   </h1>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Button
+                  <Link href="/user-profile">
+                   <Button
                     className="w-full border bg-transparent hover:bg-sidebar-accent text-black dark:text-white"
                   >
                     <Settings className="mr-2 h-4 w-4" /> Setting
                   </Button>
+                  </Link>
+                 
                   <Button
                     onClick={logOut}
                     className="w-full border bg-transparent hover:bg-sidebar-accent text-black dark:text-white"

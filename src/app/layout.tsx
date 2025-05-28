@@ -8,6 +8,7 @@ import { Headers } from "./_components/headers";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./_components/app-side-bar";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
+import { UserProvider } from "@/providers/user-provider";
 
 
 const poppins = Poppins({
@@ -32,17 +33,19 @@ export default function RootLayout({
         className={`${poppins.variable} font-poppins antialiased`}>
         <ReactQueryProvider >
           <AuthWrapper >
-            <ClientWrapper>
-              <SidebarProvider>
-                <ThemeProvider attribute="class" defaultTheme="light" >
-                  <AppSidebar />
-                  <div className="flex flex-col w-full ">
-                    <Headers />
-                    {children}
-                  </div>
-                </ThemeProvider>
-              </SidebarProvider>
-            </ClientWrapper>
+            <UserProvider>
+              <ClientWrapper>
+                <SidebarProvider>
+                  <ThemeProvider attribute="class" defaultTheme="light" >
+                    <AppSidebar />
+                    <div className="flex flex-col w-full ">
+                      <Headers />
+                      {children}
+                    </div>
+                  </ThemeProvider>
+                </SidebarProvider>
+              </ClientWrapper>
+            </UserProvider>
           </AuthWrapper>
         </ReactQueryProvider>
       </body>
