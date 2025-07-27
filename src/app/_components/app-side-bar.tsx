@@ -29,7 +29,7 @@ const data = {
   ],
   navMain: [
     { icon: <House />, title: 'Home', path: '/home' },
-    { icon: <SparklesIcon />, title: 'Ask AI', path: '/ask-ai' },
+    { icon: <SparklesIcon />, title: 'Ask AI', path: '/ask-ai' },     
     { icon: <Upload />, title: 'Upload CV', path: '/resume' }
     // { title: 'Trash', path: 'trash' }
   ]
@@ -42,7 +42,7 @@ export async function AppSidebar({
 
   return (
     <>
-      <Sidebar className="" {...props}>
+      <Sidebar className="h-screen" {...props}>
         <SidebarHeader>
         </SidebarHeader>
         <SidebarContent className="flex justify-between">

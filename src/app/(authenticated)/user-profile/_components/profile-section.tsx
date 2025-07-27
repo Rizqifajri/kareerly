@@ -14,6 +14,7 @@ export const ProfileSection = () => {
     ? `${client.baseUrl}/api/files/users/${user.id}/${user.avatar}`
     : null
 
+    console.log(user)
   return (
     <div className="flex flex-col gap-10">
       <div className="flex flex-col items-center justify-center">
