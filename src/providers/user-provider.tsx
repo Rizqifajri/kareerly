@@ -15,7 +15,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    const userId = client.authStore.model?.id
+    const userId = client?.authStore?.model?.id
     if (userId) {
       getGeneralInfo(userId).then((data) => {
         console.log(data)
