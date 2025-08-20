@@ -13,8 +13,6 @@ interface MarkdownRendererProps {
   className?: string
 }
 
-// Custom code block component
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CodeBlock = ({ inline, className, children, ...props }: any) => {
   const [copied, setCopied] = useState(false)
   const match = /language-(\w+)/.exec(className || "")
@@ -108,7 +106,6 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     <div className={`markdown-content ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         components={markdownComponents as any}
       >
         {content}
