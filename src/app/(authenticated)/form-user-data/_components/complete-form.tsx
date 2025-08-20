@@ -1,109 +1,141 @@
-'use client';
+// app/(authenticated)/form-user-data/_components/complete-form.tsx
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import * as React from "react";
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Check, Clipboard } from "lucide-react";
 
-export default function CompleteForm() {
-  const [formData, setFormData] = useState<any>(null);
+export type Reco = {
+  title: string;
+  reason: string;
+  suggested_keywords: string[];
+};
 
-  useEffect(() => {
-    const storedData = localStorage.getItem('pb_user');
-    if (storedData) {
-      setFormData(JSON.parse(storedData));
-    }
-  }, []);
+type CompleteFormProps = {
+  recommendations?: Reco[];
+  loading?: boolean;
+  error?: string | null;
+};
 
-  if (!formData) return <div>Loading...</div>;
+export default function CompleteForm({
+  recommendations = [],
+  loading = false,
+  error = null,
+}: CompleteFormProps) {
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
-  const { general, experience, skills } = formData;
+  const allKeywords = useMemo(() => {
+    const list = recommendations.flatMap((r) => r.suggested_keywords || []);
+    return Array.from(new Set(list.map((k) => k.trim()).filter(Boolean)));
+  }, [recommendations]);
 
-  const formatDate = (dateStr: string) =>
-    dateStr ? new Date(dateStr).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
-
-  const renderBadges = (input: string[] | string) => {
-    if (Array.isArray(input)) {
-      return input.map((item, i) => (
-        <Badge key={i}>{item}</Badge>
-      ));
-    } else if (typeof input === 'string') {
-      return input.split(',').map((item, i) => (
-        <Badge key={i}>{item.trim()}</Badge>
-      ));
-    }
-    return <Badge>-</Badge>;
+  const handleCopyItem = async (idx: number, keywords: string[]) => {
+    const text = keywords.join(", ");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 1500);
+    } catch {}
   };
 
+  const handleCopyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(allKeywords.join(", "));
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1500);
+    } catch {}
+  };
+
+  if (loading) {
+    return (
+      <div className="p-4 text-sm">
+        AI thinking…
+        <div className="mt-3 h-2 w-40 animate-pulse rounded bg-muted" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-4 text-sm text-red-600">Gagal generate: {error}</div>;
+  }
+
   return (
-    <div className="space-y-4">
-      {/* General Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>General Information</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-2">
-          <div><strong>First Name:</strong> {general?.firstname || '-'}</div>
-          <div><strong>Last Name:</strong> {general?.lastname || '-'}</div>
-          <div><strong>Email:</strong> {general?.email || '-'}</div>
-          <div><strong>Address:</strong> {general?.address || '-'}</div>
-          <div><strong>City:</strong> {general?.city || '-'}</div>
-          <div><strong>Country:</strong> {general?.country || '-'}</div>
-          <div><strong>Location:</strong> {general?.location || '-'}</div>
-          <div><strong>Major:</strong> {general?.major || '-'}</div>
-          <div><strong>Work Preference:</strong> {general?.work_preference || '-'}</div>
-          <div><strong>Preferred Work Style:</strong> {general?.preferred_work_setting || '-'}</div>
-        </CardContent>
-      </Card>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold">Rekomendasi Pekerjaan</h3>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleCopyAll}
+          disabled={allKeywords.length === 0}
+          className="gap-2"
+          aria-label="Copy all keywords"
+        >
+          {copiedAll ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+          {copiedAll ? "Copied" : "Copy All Keywords"}
+        </Button>
+      </div>
 
-      {/* Experience Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Experience</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-4">
-          <div><strong>Worked Before:</strong> {experience?.have_experience_before ? 'Yes' : 'No'}</div>
+      {recommendations.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Belum ada rekomendasi. Klik “Generate”.</p>
+      ) : (
+        <ul className="space-y-4">
+          {recommendations.map((r, idx) => (
+            <li key={`${r.title}-${idx}`} className="rounded-xl border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium">{r.title}</div>
+                  {r.reason && <div className="mt-1 text-sm text-muted-foreground">{r.reason}</div>}
+                </div>
 
-          {experience?.experience?.length > 0 ? (
-            experience.experience.map((expItem: any, idx: number) => (
-              <div key={idx} className="border p-3 rounded-md">
-                <div><strong>Job Title:</strong> {expItem.job_title || '-'}</div>
-                <div><strong>Company Name:</strong> {expItem.company_name || '-'}</div>
-                <div><strong>Duration:</strong> {formatDate(expItem.from)} - {formatDate(expItem.to)}</div>
-                <div><strong>Responsibilities:</strong> {expItem.responsibilities || '-'}</div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleCopyItem(idx, r.suggested_keywords ?? [])}
+                  disabled={!r.suggested_keywords || r.suggested_keywords.length === 0}
+                  className="gap-2"
+                  aria-label="Copy item keywords"
+                >
+                  {copiedIdx === idx ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard className="h-4 w-4" />
+                      Copy Keywords
+                    </>
+                  )}
+                </Button>
               </div>
-            ))
-          ) : (
-            <div>No experience available</div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Skills */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Skills</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-4">
-          <div>
-            <strong>Soft Skills:</strong>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {renderBadges(skills?.soft_skill)}
-            </div>
-          </div>
-          <div>
-            <strong>Hard Skills:</strong>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {renderBadges(skills?.hard_skill)}
-            </div>
-          </div>
-          <div>
-            <strong>Language:</strong>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {renderBadges(skills?.languages)}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              {r.suggested_keywords?.length ? (
+                <>
+                  <Separator className="my-3" />
+                  <div className="flex flex-wrap gap-2">
+                    {r.suggested_keywords.map((k, i) => (
+                      <Badge key={`${k}-${i}`} variant="secondary">
+                        {k}
+                      </Badge>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Tips: pakai keywords di atas buat cari lowongan di job board internal/eksternal.
+      </p>
     </div>
   );
 }

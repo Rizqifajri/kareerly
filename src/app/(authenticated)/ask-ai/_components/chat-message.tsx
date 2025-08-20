@@ -1,8 +1,9 @@
+// app/(authenticated)/ask-ai/_components/chat-message.tsx  (atau path kamu)
 "use client"
 
 import type React from "react"
-
 import { useRef, useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -10,20 +11,31 @@ import { PaperclipIcon, SendIcon } from "lucide-react"
 import { generateOpenAI } from "@/lib/open-ai"
 import { StreamingMarkdown } from "./streaming-markdown"
 import { useUser } from "@/hooks/use-users"
+import {
+  createThread,
+  loadMessages,
+  saveMessages,
+  touchThread,
+  makeTitleFromText,
+  type ChatMessage as StoredMsg,
+} from "@/lib/chat-storage"
 
 type Message = {
   id: string
   content: string
   isUser: boolean
   isStreaming?: boolean
-  file?: {
-    name: string
-    type: string
-  } | null
+  file?: { name: string; type: string } | null
 }
 
 export const ChatMessage = () => {
   const { user } = useUser()
+  const uid = user?.record?.id ?? "anon"
+
+  const router = useRouter()
+  const params = useSearchParams()
+  const paramThread = params.get("thread")
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [inputValue, setInputValue] = useState("")
@@ -31,64 +43,92 @@ export const ChatMessage = () => {
   const [isGenerating, setIsGenerating] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
+  // threadId null = draft (belum masuk history). Akan dibuat saat user kirim pesan pertama.
+  const [threadId, setThreadId] = useState<string | null>(null)
+
+  // Load existing thread jika ada di URL
+  useEffect(() => {
+    if (paramThread) {
+      setThreadId(paramThread)
+      const existing = loadMessages(uid, paramThread) as unknown as Message[]
+      setMessages(existing ?? [])
+    } else {
+      setThreadId(null)
+      setMessages([]) // blank draft
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramThread, uid])
+
+  // Auto-scroll
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
     }
   }, [messages])
 
+  // Persist per-thread setiap messages berubah (hanya kalau sudah punya threadId)
+  useEffect(() => {
+    if (!threadId) return
+    // trim agar tidak membengkak
+    const MAX_MSG = 500
+    const toSave: StoredMsg[] = (messages.length > MAX_MSG ? messages.slice(-MAX_MSG) : messages) as any
+    saveMessages(uid, threadId, toSave)
+  }, [messages, threadId, uid])
+
   const handleGenerate = async () => {
     if (!inputValue.trim() && !selectedFile) return
 
+    // Buat pesan user
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputValue,
       isUser: true,
-      file: selectedFile
-        ? {
-            name: selectedFile.name,
-            type: selectedFile.type,
-          }
-        : null,
+      file: selectedFile ? { name: selectedFile.name, type: selectedFile.type } : null,
     }
 
+    // Jika belum ada thread (draft), buat thread sekarang → masuk History
+    let currentThread = threadId
+    if (!currentThread) {
+      const title = makeTitleFromText(userMessage.content)
+      currentThread = createThread(uid, title) // ⬅️ masuk history di sini
+      setThreadId(currentThread)
+      // update URL agar bisa reload/ share link
+      router.replace(`/ask-ai?thread=${currentThread}`)
+    } else {
+      // update updatedAt
+      touchThread(uid, currentThread)
+    }
+
+    // Tambahkan user message
     setMessages((prev) => [...prev, userMessage])
+
+    // Reset input
     const currentInput = inputValue
     setInputValue("")
     setSelectedFile(null)
     setIsGenerating(true)
 
-    // Create AI message placeholder
+    // Placeholder AI message
     const aiMessageId = (Date.now() + 1).toString()
-    const aiMessage: Message = {
-      id: aiMessageId,
-      content: "",
-      isUser: false,
-      isStreaming: true,
-    }
-
+    const aiMessage: Message = { id: aiMessageId, content: "", isUser: false, isStreaming: true }
     setMessages((prev) => [...prev, aiMessage])
 
     try {
       await generateOpenAI(currentInput, (chunk: string) => {
-        // Update the AI message with streaming content
         setMessages((prev) =>
           prev.map((msg) => (msg.id === aiMessageId ? { ...msg, content: msg.content + chunk } : msg)),
         )
       })
-
-      // Mark streaming as complete
+      // Finish stream
       setMessages((prev) => prev.map((msg) => (msg.id === aiMessageId ? { ...msg, isStreaming: false } : msg)))
+      // Bump updatedAt
+      touchThread(uid, currentThread!)
     } catch (error) {
       console.error("Error generating response:", error)
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === aiMessageId
-            ? {
-                ...msg,
-                content: "Maaf, terjadi kesalahan saat menghubungi AI.",
-                isStreaming: false,
-              }
+            ? { ...msg, content: "Maaf, terjadi kesalahan saat menghubungi AI.", isStreaming: false }
             : msg,
         ),
       )
@@ -97,17 +137,11 @@ export const ChatMessage = () => {
     setIsGenerating(false)
   }
 
-  const handleFileAttach = () => {
-    fileInputRef.current?.click()
-  }
-
+  const handleFileAttach = () => fileInputRef.current?.click()
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-    }
+    if (file) setSelectedFile(file)
   }
-
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
@@ -115,11 +149,10 @@ export const ChatMessage = () => {
     }
   }
 
-  // Get user display name with fallbacks
-  const getUserDisplayName = () => {
-    if (!user) return "User"
-    return user?.record?.name
-  }
+  // Nama user (UI tetap)
+  const getUserDisplayName = () => user?.record?.name || "User"
+
+  // === RENDER (UI asli kamu, tidak diubah) ===
 
   if (messages.length === 0) {
     return (
@@ -139,7 +172,6 @@ export const ChatMessage = () => {
               onKeyDown={handleKeyDown}
             />
 
-            {/* File Attachment Button */}
             <Button
               onClick={handleFileAttach}
               size="sm"
@@ -149,7 +181,6 @@ export const ChatMessage = () => {
               <PaperclipIcon className="h-4 w-4 text-muted-foreground hover:text-foreground" />
             </Button>
 
-            {/* Send Button */}
             <Button
               onClick={handleGenerate}
               size="sm"
@@ -189,7 +220,6 @@ export const ChatMessage = () => {
 
   return (
     <section className="flex flex-col h-screen bg-background">
-      {/* Messages */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => (
           <div key={message.id} className={`flex gap-3 ${message.isUser ? "justify-end" : "justify-start"}`}>
@@ -229,7 +259,7 @@ export const ChatMessage = () => {
               <Avatar className="w-8 h-8 flex-shrink-0">
                 <AvatarImage src={user?.avatar || user?.profileImage || "/placeholder.svg?height=32&width=32"} />
                 <AvatarFallback className="bg-blue-500 text-white text-xs">
-                  {getUserDisplayName().charAt(0).toUpperCase()}
+                  {(user?.record?.name || "U").charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             )}
@@ -243,25 +273,15 @@ export const ChatMessage = () => {
             </Avatar>
             <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
               <div className="flex space-x-1">
-                <div
-                  className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <div
-                  className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <div
-                  className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                  style={{ animationDelay: "300ms" }}
-                />
+                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Input Area */}
       <div className="border-t border-border p-4 bg-card">
         <div className="relative max-w-4xl mx-auto">
           <Input
@@ -272,8 +292,6 @@ export const ChatMessage = () => {
             onKeyDown={handleKeyDown}
             disabled={isGenerating}
           />
-
-          {/* File Attachment Button */}
           <Button
             onClick={handleFileAttach}
             size="sm"
@@ -283,8 +301,6 @@ export const ChatMessage = () => {
           >
             <PaperclipIcon className="h-4 w-4 text-muted-foreground hover:text-foreground" />
           </Button>
-
-          {/* Send Button */}
           <Button
             onClick={handleGenerate}
             size="sm"
@@ -297,7 +313,6 @@ export const ChatMessage = () => {
               <SendIcon className="h-4 w-4 text-primary-foreground" />
             )}
           </Button>
-
           <input
             ref={fileInputRef}
             type="file"
@@ -311,12 +326,7 @@ export const ChatMessage = () => {
           <div className="max-w-4xl mx-auto mt-3 text-sm text-muted-foreground flex items-center">
             <PaperclipIcon className="h-3 w-3 mr-1" />
             <span>{selectedFile.name}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-2 h-5 w-5 p-0 hover:bg-muted rounded-full"
-              onClick={() => setSelectedFile(null)}
-            >
+            <Button variant="ghost" size="sm" className="ml-2 h-5 w-5 p-0 hover:bg-muted rounded-full" onClick={() => setSelectedFile(null)}>
               ×
             </Button>
           </div>
