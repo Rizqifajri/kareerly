@@ -21,7 +21,6 @@ import { useCreateExperienceQuery } from "@/hooks/user/experience/use-create-exp
 import { useUpdateGeneralQuery } from "@/hooks/user/general/use-update-general-query";
 import { useCreateSkillsQuery } from "@/hooks/user/skills/use-create-skills-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { SparkleIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -78,7 +77,7 @@ const FormStepperComponent = () => {
     if (cached) {
       try {
         setRecommendations(JSON.parse(cached));
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -242,7 +241,6 @@ const FormStepperComponent = () => {
             >
               {recoLoading ? "Generating…" : (
                 <>
-                  Generate <SparkleIcon className="ml-1 h-4 w-4" />
                 </>
               )}
             </Button>
