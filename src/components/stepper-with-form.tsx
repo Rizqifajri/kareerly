@@ -1,6 +1,8 @@
+// app/(authenticated)/form-user-data/stepper-with-form.tsx
 "use client";
 
-import CompleteForm from "@/app/(authenticated)/form-user-data/_components/complete-form";
+import React, { useEffect, useState } from "react";
+import CompleteForm, { type Reco } from "@/app/(authenticated)/form-user-data/_components/complete-form";
 import { ExperienceForm } from "@/app/(authenticated)/form-user-data/_components/experience-form";
 import { GeneralForm } from "@/app/(authenticated)/form-user-data/_components/general-form";
 import { SkillsForm } from "@/app/(authenticated)/form-user-data/_components/skills-form";
@@ -46,7 +48,7 @@ const { Stepper, useStepper } = defineStepper(
     id: "final",
     title: "Final",
     schema: z.object({}),
-    Component: CompleteForm,
+    Component: CompleteForm, // kita override di switch agar bisa pass props
   }
 );
 
@@ -65,16 +67,28 @@ const FormStepperComponent = () => {
   const { mutate: createExperience } = useCreateExperienceQuery();
   const { mutate: createSkills } = useCreateSkillsQuery();
 
+  // State rekomendasi AI
+  const [recoLoading, setRecoLoading] = useState(false);
+  const [recoError, setRecoError] = useState<string | null>(null);
+  const [recommendations, setRecommendations] = useState<Reco[]>([]);
+
+  // (opsional) restore hasil rekomendasi yang tersimpan
+  useEffect(() => {
+    const cached = localStorage.getItem("pb_reco");
+    if (cached) {
+      try {
+        setRecommendations(JSON.parse(cached));
+      } catch {}
+    }
+  }, []);
+
   type StepFormValues = GeneralFormValues | ExperienceFormValues | SkillsFormValues;
 
-  const handleNext: (data: StepFormValues) => Promise<void> = async (data: StepFormValues) => {
-    console.log("➡ handleNext called", data);
+  const handleNext: (data: StepFormValues) => Promise<void> = async (data) => {
     const prevData = localStorage.getItem("pb_user") || "{}";
     const parsed = JSON.parse(prevData);
     const newData = { ...parsed, [methods.current.id]: data };
     localStorage.setItem("pb_user", JSON.stringify(newData));
-
-    // Pindah ke step selanjutnya
     methods.next();
   };
 
@@ -87,56 +101,62 @@ const FormStepperComponent = () => {
     if (!userId) return;
 
     try {
-      // Save Experience
-      const experiences = newData.experience?.experience || [];
-      const createdExperienceIds: string[] = [];
+      setRecoError(null);
+      setRecoLoading(true);
 
+      // 1) Save Experience
+      const experiences = newData.experience?.experience || [];
       for (const exp of experiences) {
         await new Promise((resolve, reject) => {
           createExperience(
             { userId, data: exp },
             {
-              onSuccess: (res) => {
-                createdExperienceIds.push(res.id);
-                resolve(null);
-              },
+              onSuccess: () => resolve(null),
               onError: reject,
             }
           );
         });
       }
 
-      // Save General Info
+      // 2) Save General
       await new Promise((resolve, reject) => {
         updateGeneral(
-          {
-            userId,
-            data: newData.general,
-          },
+          { userId, data: newData.general },
           { onSuccess: () => resolve(null), onError: reject }
         );
       });
 
-      // Save Skills
+      // 3) Save Skills
       await new Promise((resolve, reject) => {
         createSkills(
-          {
-            userId,
-            data: newData.skills,
-          },
+          { userId, data: newData.skills },
           { onSuccess: () => resolve(null), onError: reject }
         );
       });
 
-      console.log("✅ All data saved successfully!");
-      localStorage.removeItem("pb_user");
-      methods.reset(); 
+      // 4) Panggil AI (tanpa pindah step)
+      const res = await fetch("/api/recommendations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          general: newData.general,
+          experience: newData.experience,
+          skills: newData.skills,
+        }),
+      });
 
-    } catch (err) {
-      console.error("❌ Failed to save data:", err);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to generate recommendations");
+
+      setRecommendations(data.jobs ?? []);
+      localStorage.setItem("pb_reco", JSON.stringify(data.jobs ?? [])); // cache hasil
+    } catch (err: any) {
+      console.error("❌ Failed to save/generate:", err);
+      setRecoError(err?.message || "Failed to save/generate");
+    } finally {
+      setRecoLoading(false);
     }
   };
-
 
   const defaultValuesMap = {
     general: {
@@ -163,30 +183,26 @@ const FormStepperComponent = () => {
       skills: [],
     },
     final: {},
-  };
-
-
+  } as const;
 
   const form = useForm({
     mode: "onChange",
     resolver: zodResolver(methods.current.schema),
-    defaultValues: defaultValuesMap[methods.current.id],
+    defaultValues: defaultValuesMap[methods.current.id as keyof typeof defaultValuesMap],
   });
 
   return (
     <Form {...form} key={methods.current.id}>
-      <form
-        onSubmit={form.handleSubmit(handleNext as any)}
-        className="space-y-4"
-      >
+      <form onSubmit={form.handleSubmit(handleNext as any)} className="space-y-4">
         <Stepper.Navigation>
           {methods?.all?.map((step) => (
             <Stepper.Step
               key={step.id}
               of={step.id}
+              // Biar step clickable: validasi current form dulu baru pindah
               type={step.id === methods.current.id ? "submit" : "button"}
               onClick={async () => {
-                if (step.id !== methods.current.id) return;
+                // validasi step aktif sebelum pindah
                 const valid = await form.trigger();
                 if (!valid) return;
                 methods.goTo(step.id);
@@ -201,23 +217,34 @@ const FormStepperComponent = () => {
           general: ({ Component }) => <Component />,
           experience: ({ Component }) => <Component />,
           skills: ({ Component }) => <Component />,
-          final: ({ Component }) => <Component />,
+          // ⬇️ override: kirim props langsung ke CompleteForm
+          final: () => (
+            <CompleteForm
+              recommendations={recommendations}
+              loading={recoLoading}
+              error={recoError}
+            />
+          ),
         })}
 
         <Stepper.Controls className="mb-5">
           {!methods.isFirst && (
-            <Button
-              className="cursor-pointer"
-              variant="secondary"
-              type="button"
-              onClick={() => methods.prev()}
-            >
+            <Button className="cursor-pointer" variant="secondary" type="button" onClick={() => methods.prev()}>
               Previous
             </Button>
           )}
           {methods.isLast ? (
-            <Button className="cursor-pointer" type="button" onClick={handleSubmitAll}>
-              Generate <SparkleIcon />
+            <Button
+              className="cursor-pointer"
+              type="button"
+              onClick={handleSubmitAll}
+              disabled={recoLoading}
+            >
+              {recoLoading ? "Generating…" : (
+                <>
+                  Generate <SparkleIcon className="ml-1 h-4 w-4" />
+                </>
+              )}
             </Button>
           ) : (
             <Button className="cursor-pointer" type="submit">
@@ -225,7 +252,6 @@ const FormStepperComponent = () => {
             </Button>
           )}
         </Stepper.Controls>
-
       </form>
     </Form>
   );
