@@ -14,57 +14,50 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // Create streaming response
       const encoder = new TextEncoder()
 
-      const stream = new ReadableStream({
+      const streamRes = new ReadableStream({
         async start(controller) {
           try {
             const completion = await openai.chat.completions.create({
-              model: "gpt-3.5-turbo",
+              model: "gpt-4o-mini",
               messages: [
                 {
                   role: "system",
-                  content: "You are a helpful assistant. Respond in a friendly and informative manner.",
+                  content: `
+You are Kareerly AI Assistant, a career advisor and job-matching helper.
+Answer user questions in a friendly, professional, and practical way.
+Keep answers clear, concise, and easy to understand.
+Do not output JSON unless explicitly asked.
+`,
                 },
-                {
-                  role: "user",
-                  content: message,
-                },
+                { role: "user", content: message },
               ],
               stream: true,
-              max_tokens: 1000,
               temperature: 0.7,
+              max_tokens: 1000,
             })
 
             for await (const chunk of completion) {
               const content = chunk.choices[0]?.delta?.content || ""
-
               if (content) {
                 const data = JSON.stringify({
-                  choices: [
-                    {
-                      delta: {
-                        content: content,
-                      },
-                    },
-                  ],
+                  choices: [{ delta: { content } }],
                 })
-
                 controller.enqueue(encoder.encode(`data: ${data}\n\n`))
               }
             }
 
             controller.enqueue(encoder.encode("data: [DONE]\n\n"))
             controller.close()
-          } catch (error) {
-            console.error("OpenAI API error:", error)
-            controller.error(error)
+          } catch (err) {
+            console.error("OpenAI API error:", err)
+            controller.error(err)
           }
         },
       })
 
-      return new Response(stream, {
+      return new Response(streamRes, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
@@ -72,29 +65,29 @@ export async function POST(req: NextRequest) {
         },
       })
     } else {
-      // Non-streaming response (fallback)
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: "You are a helpful assistant. Respond in a friendly and informative manner.",
+            content: `
+You are Kareerly AI Assistant, a career advisor and job-matching helper.
+Answer user questions in a friendly, professional, and practical way.
+Keep answers clear, concise, and easy to understand.
+Do not output JSON unless explicitly asked.
+`,
           },
-          {
-            role: "user",
-            content: message,
-          },
+          { role: "user", content: message },
         ],
-        max_tokens: 1000,
         temperature: 0.7,
+        max_tokens: 1000,
       })
 
       const result = completion.choices[0]?.message?.content || "No response generated"
-
       return NextResponse.json({ result })
     }
-  } catch (error) {
-    console.error("API error:", error)
+  } catch (err) {
+    console.error("API error:", err)
     return NextResponse.json({ error: "Failed to generate response" }, { status: 500 })
   }
 }

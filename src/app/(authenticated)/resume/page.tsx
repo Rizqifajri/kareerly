@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CompleteForm, { type Reco } from "@/app/(authenticated)/form-user-data/_components/complete-form";
+import CVResult from "./_components/cv-result";
 
 export default function ResumePage() {
   const [file, setFile] = useState<File | null>(null);
@@ -17,6 +18,7 @@ export default function ResumePage() {
       setError("Pilih file CV terlebih dahulu.");
       return;
     }
+
     setLoading(true);
     setError(null);
     setRecommendations([]);
@@ -27,7 +29,12 @@ export default function ResumePage() {
     try {
       const res = await fetch("/api/cv-recommendations", { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Gagal memproses CV");
+
+      if (!res.ok) {
+        console.error("CV API Error:", data);
+        throw new Error(data?.error || "Gagal memproses CV");
+      }
+
       setRecommendations(data.jobs ?? []);
     } catch (e: any) {
       setError(e?.message || "Gagal memproses CV");
@@ -59,8 +66,7 @@ export default function ResumePage() {
         {file && <p className="text-xs text-muted-foreground">File: {file.name}</p>}
       </div>
 
-      {/* Reuse komponen kamu */}
-      <CompleteForm recommendations={recommendations} loading={loading} error={error} />
+      <CVResult recommendations={recommendations} loading={loading} error={error} />
     </div>
   );
 }
