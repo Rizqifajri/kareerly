@@ -1,87 +1,166 @@
-import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
+import { NextRequest, NextResponse } from "next/server";
+import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { skills, industries, experience_level, education, certifications } = body
+    const body = await req.json();
+    console.log("Received body:", body); // Debug log
 
-    if (!skills?.length && !industries?.length) {
-      return NextResponse.json({ error: "At least provide skills or industries" }, { status: 400 })
+    // Accept nested payload from stepper: { general, experience, skills }
+    const {
+      skills: skillsInput,
+      industries: industriesInput,
+      experience_level,
+      education,
+      certifications,
+      general,
+      experience,
+    } = body || {};
+
+    // Normalize skills
+    const normalizedSkills: string[] = Array.isArray(skillsInput)
+      ? skillsInput
+      : [
+          ...(Array.isArray(skillsInput?.soft_skill)
+            ? skillsInput.soft_skill
+            : []),
+          ...(Array.isArray(skillsInput?.hard_skill)
+            ? skillsInput.hard_skill
+            : []),
+          ...(Array.isArray(skillsInput?.languages)
+            ? skillsInput.languages
+            : []),
+        ].filter(Boolean);
+
+    // Normalize industries (fallback from general.major if industries not provided)
+    const normalizedIndustries: string[] = Array.isArray(industriesInput)
+      ? industriesInput
+      : Array.isArray(general?.industries)
+      ? general.industries
+      : general?.major
+      ? [general.major]
+      : [];
+
+    // Improved validation
+    const hasSkills = normalizedSkills.length > 0;
+    const hasIndustries = normalizedIndustries.length > 0;
+    console.log("Skills:", normalizedSkills, "Has skills:", hasSkills); // Debug log
+    console.log(
+      "Industries:",
+      normalizedIndustries,
+      "Has industries:",
+      hasIndustries
+    ); // Debug log
+
+    if (!hasSkills && !hasIndustries) {
+      return NextResponse.json(
+        {
+          error: "At least provide skills or industries",
+        },
+        { status: 400 }
+      );
     }
 
     const prompt = `
-You are an expert career advisor. Based on the provided structured user data,
-recommend 5 job roles that best fit. Keep reasons short and relevant.
+Anda adalah penasihat karier ahli. Berdasarkan data pengguna terstruktur yang diberikan,
+rekomendasikan 5 peran pekerjaan yang paling cocok. Jelaskan alasan secara singkat dan relevan.
+Gunakan bahasa Indonesia dalam seluruh respons.
 
 User Data:
-- Skills: ${skills?.join(", ") || "N/A"}
-- Industries: ${industries?.join(", ") || "N/A"}
-- Experience Level: ${experience_level || "N/A"}
-- Education: ${education || "N/A"}
-- Certifications: ${certifications?.join(", ") || "N/A"}
+- Skills: ${hasSkills ? normalizedSkills.join(", ") : "N/A"}
+- Industries: ${hasIndustries ? normalizedIndustries.join(", ") : "N/A"}
+- Experience Level: ${
+      experience_level || general?.preferred_work_setting || "N/A"
+    }
+- Education: ${education || general?.major || "N/A"}
+- Certifications: ${
+      Array.isArray(certifications) && certifications.length > 0
+        ? certifications.join(", ")
+        : "N/A"
+    }
 
-Return ONLY JSON in this format:
+Kembalikan HANYA JSON dengan format berikut:
 {
   "jobs": [
     { "title": "string", "reason": "string", "suggested_keywords": ["string"] }
   ]
 }
-`
+`;
 
-    const resp = await openai.responses.create({
+    // Fixed OpenAI API call
+    const resp = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      input: [
+      messages: [
         {
           role: "system",
-          content: "You are a job-matching assistant. Strictly return JSON only.",
+          content:
+            "Anda adalah asisten pencocokan pekerjaan. Jawab hanya dalam bahasa Indonesia. Kembalikan hanya JSON.",
         },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: prompt,
+        },
       ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "job_recommendations",
-          strict: false,
-          schema: {
-            type: "object",
-            required: ["jobs"],
-            properties: {
-              jobs: {
-                type: "array",
-                minItems: 3,
-                maxItems: 7,
-                items: {
-                  type: "object",
-                  required: ["title", "reason", "suggested_keywords"],
-                  properties: {
-                    title: { type: "string" },
-                    reason: { type: "string" },
-                    suggested_keywords: {
-                      type: "array",
-                      items: { type: "string" },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+      response_format: {
+        type: "json_object",
       },
       temperature: 0.3,
-    })
+    });
 
-    const jsonText = resp.output_text
+    const jsonText = resp.choices[0].message.content;
+    console.log("OpenAI response:", jsonText); // Debug log
+
     if (!jsonText) {
-      return NextResponse.json({ error: "Model tidak mengembalikan output." }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Model tidak mengembalikan output.",
+        },
+        { status: 500 }
+      );
     }
 
-    const payload = JSON.parse(jsonText)
-    return NextResponse.json(payload)
+    const payload = JSON.parse(jsonText);
+
+    // Validate response structure
+    if (!payload.jobs || !Array.isArray(payload.jobs)) {
+      return NextResponse.json(
+        {
+          error: "Invalid response format from AI model",
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(payload);
   } catch (e: any) {
-    console.error("recommendations error:", e)
-    return NextResponse.json({ error: e?.message || "Failed to generate recommendations" }, { status: 500 })
+    console.error("Recommendations error:", e);
+
+    // More detailed error handling
+    if (e.name === "SyntaxError") {
+      return NextResponse.json(
+        {
+          error: "Failed to parse AI response",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (e.code === "invalid_api_key") {
+      return NextResponse.json(
+        {
+          error: "Invalid OpenAI API key",
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: e?.message || "Failed to generate recommendations",
+      },
+      { status: 500 }
+    );
   }
 }
