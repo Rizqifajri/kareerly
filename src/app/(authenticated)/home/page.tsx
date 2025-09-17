@@ -17,13 +17,13 @@ const HomePage = () => {
         <Link href="/form-user-data">
           <div className="flex flex-col w-[350px] mt-10 hover:cursor-pointer p-5 hover:border hover:scale-110 hover:shadow-2xl transition-all rounded-xl gap-5">
             <h1 className="text-xl font-bold flex items-center gap-5">Start Journey <ArrowRight /></h1>
-            <p className="text-[14px] font-medium text-justify">Lorem ipsum dolor sit amet consectetur adipisicing elit. Lorem ipsum dolor sit amet consectetur adipisicing elit. Lorem ipsum dolor sit amet consectetur adipisicing elit. </p>
+            <p className="text-[14px] font-medium text-justify">Mulai dari sini untuk membangun profil karier Anda langkah demi langkah. Jawab beberapa pertanyaan tentang keahlian dan minat Anda, lalu biarkan sistem cerdas kami menemukan peluang terbaik.</p>
           </div>
         </Link>
         <Link href="/resume">
           <div className="flex flex-col w-[350px] mt-10 hover:cursor-pointer p-5 hover:border hover:scale-110 hover:shadow-2xl transition-all rounded-xl gap-5">
             <h1 className="text-xl font-bold flex items-center gap-5">Upload Your CV <ArrowRight /></h1>
-            <p className="text-[14px] font-medium text-justify">Lorem ipsum dolor sit amet consectetur adipisicing elit.Lorem ipsum dolor sit amet consectetur adipisicing elit. </p>
+            <p className="text-[14px] font-medium text-justify">Sudah punya CV? Hemat waktu Anda dengan mengunggahnya langsung. Biarkan AI kami menganalisis kualifikasi Anda secara instan dan temukan lowongan yang paling cocok dalam hitungan detik.</p>
           </div>
         </Link>
       </div>
