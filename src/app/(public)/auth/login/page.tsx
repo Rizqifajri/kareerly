@@ -155,13 +155,13 @@ const Login = () => {
       <p className="text-center my-4">or</p>
 
       <div className="flex flex-col gap-3 w-full">
-        <Button
+        {/* <Button
           disabled={isPending}
           onClick={googleSignIn}
           className="cursor-pointer rounded-full border bg-white hover:bg-white text-black"
         >
          <Image src={"/google.png"} alt="Google Logo" width={20} height={20} /> Login with Google Account
-        </Button>
+        </Button> */}
         <p>Don&apos;t have an account? <Link className="underline dark:text-white " href="/auth/sign-up">Register</Link></p>
       </div>
     </div>
